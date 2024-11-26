@@ -28,7 +28,8 @@ class AccountMove(models.Model):
     firma_fel = fields.Char('Firma FEL', copy=False)
     serie_fel = fields.Char('Serie FEL', copy=False)
     numero_fel = fields.Char('Numero FEL', copy=False)
-    numero_acceso_fel = fields.Char('Numero Acceso FEL', copy=False)
+    numero_acceso_fel = fields.Integer('Numero Acceso FEL', copy=False)
+    contingencia_fel = fields.Boolean('Contingencia FEL', copy=False)
     factura_original_id = fields.Many2one('account.move', string="Factura original FEL", domain="[('invoice_date', '!=', False)]")
     consignatario_fel = fields.Many2one('res.partner', string="Consignatario o Destinatario FEL")
     comprador_fel = fields.Many2one('res.partner', string="Comprador FEL")
@@ -36,7 +37,7 @@ class AccountMove(models.Model):
     lugar_expedicion_fel = fields.Char(string="Lugar Expedición FEL")
     incoterm_fel = fields.Char(string="Incoterm FEL")
     otra_referencia_fel = fields.Char(string="Otra Referencia FEL")
-    frase_exento_fel = fields.Integer('Fase Exento FEL')
+    frase_exento_fel = fields.Integer('Frase Exento FEL')
     motivo_fel = fields.Char(string='Motivo FEL')
     documento_xml_fel = fields.Binary('Documento XML FEL', copy=False)
     documento_xml_fel_name = fields.Char('Nombre documento XML FEL', default='documento_xml_fel.xml', size=32)
@@ -55,6 +56,7 @@ class AccountMove(models.Model):
     def error_certificador(self, error):
         self.ensure_one()
         factura = self
+        factura.contingencia_fel = True
         if factura.journal_id.error_en_historial_fel:
             factura.message_post(body='<p>No se publicó la factura por error del certificador FEL:</p> <p><strong>'+error+'</strong></p>')
         else:
@@ -186,8 +188,9 @@ class AccountMove(models.Model):
         fecha = factura.invoice_date.strftime('%Y-%m-%d') if factura.invoice_date else fields.Date.context_today(self).strftime('%Y-%m-%d')
         hora = "00:00:00-06:00"
         fecha_hora = fecha+'T'+hora
-        numero_acceso = factura.numero_acceso_fel if factura.numero_acceso_fel else str(factura.id+100000000)
-        DatosGenerales = etree.SubElement(DatosEmision, DTE_NS+"DatosGenerales", CodigoMoneda=moneda, FechaHoraEmision=fecha_hora, Tipo=tipo_documento_fel, NumeroAcceso=numero_acceso)
+        DatosGenerales = etree.SubElement(DatosEmision, DTE_NS+"DatosGenerales", CodigoMoneda=moneda, FechaHoraEmision=fecha_hora, Tipo=tipo_documento_fel)
+        if factura.contingencia_fel:
+            DatosGenerales.attrib['NumeroAcceso'] = str(factura.numero_acceso_fel)
         if factura.tipo_gasto == 'importacion':
             DatosGenerales.attrib['Exp'] = 'SI'
         if factura.company_id.tipo_personeria_fel:
