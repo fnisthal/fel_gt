@@ -267,6 +267,7 @@ class AccountMove(models.Model):
         gran_subtotal = 0
         gran_total = 0
         gran_total_impuestos = 0
+        gran_total_impuestos_extras = {}
         gran_num_lineas_sin_impuestos = 0
         self.descuento_lineas()
         
@@ -305,6 +306,9 @@ class AccountMove(models.Model):
                                 'total': i['amount'],
                                 'base': i['base'],
                             }
+                            gran_total_impuestos_extras[impuesto.tipo_impuesto_fel] = { 'tipo': impuesto.tipo_impuesto_fel, 'total': 0 }
+                        
+                        gran_total_impuestos_extras[] += i['amount']
 
                         if not impuesto.price_include:
                             total_linea += i['amount']
@@ -366,7 +370,7 @@ class AccountMove(models.Model):
         if tipo_documento_fel not in ['NABN', 'RECI', 'RDON', 'FPEQ']:
             TotalImpuestos = etree.SubElement(Totales, DTE_NS+"TotalImpuestos")
             TotalImpuesto = etree.SubElement(TotalImpuestos, DTE_NS+"TotalImpuesto", NombreCorto="IVA", TotalMontoImpuesto='{:.6f}'.format(gran_total_impuestos))
-            for impuesto in total_impuestos_extras.values():
+            for impuesto in gran_total_impuestos_extras.values():
                 TotalImpuestoExtra = etree.SubElement(TotalImpuestos, DTE_NS+"TotalImpuesto", NombreCorto=impuesto['tipo'], TotalMontoImpuesto='{:.6f}'.format(impuesto['total']))
         GranTotal = etree.SubElement(Totales, DTE_NS+"GranTotal")
         GranTotal.text = '{:.6f}'.format(gran_total)
