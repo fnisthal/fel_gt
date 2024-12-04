@@ -28,7 +28,8 @@ class AccountMove(models.Model):
     firma_fel = fields.Char('Firma FEL', copy=False)
     serie_fel = fields.Char('Serie FEL', copy=False)
     numero_fel = fields.Char('Numero FEL', copy=False)
-    numero_acceso_fel = fields.Char('Numero Acceso FEL', copy=False)
+    numero_acceso_fel = fields.Integer('Numero Acceso FEL', copy=False)
+    contingencia_fel = fields.Boolean('Contingencia FEL', copy=False)
     factura_original_id = fields.Many2one('account.move', string="Factura original FEL", domain="[('invoice_date', '!=', False)]")
     consignatario_fel = fields.Many2one('res.partner', string="Consignatario o Destinatario FEL")
     comprador_fel = fields.Many2one('res.partner', string="Comprador FEL")
@@ -36,7 +37,7 @@ class AccountMove(models.Model):
     lugar_expedicion_fel = fields.Char(string="Lugar Expedición FEL")
     incoterm_fel = fields.Char(string="Incoterm FEL")
     otra_referencia_fel = fields.Char(string="Otra Referencia FEL")
-    frase_exento_fel = fields.Integer('Fase Exento FEL')
+    frase_exento_fel = fields.Integer('Frase Exento FEL')
     motivo_fel = fields.Char(string='Motivo FEL')
     documento_xml_fel = fields.Binary('Documento XML FEL', copy=False)
     documento_xml_fel_name = fields.Char('Nombre documento XML FEL', default='documento_xml_fel.xml', size=32)
@@ -55,6 +56,7 @@ class AccountMove(models.Model):
     def error_certificador(self, error):
         self.ensure_one()
         factura = self
+        factura.contingencia_fel = True
         if factura.journal_id.error_en_historial_fel:
             factura.message_post(body='<p>No se publicó la factura por error del certificador FEL:</p> <p><strong>'+error+'</strong></p>')
         else:
@@ -186,8 +188,9 @@ class AccountMove(models.Model):
         fecha = factura.invoice_date.strftime('%Y-%m-%d') if factura.invoice_date else fields.Date.context_today(self).strftime('%Y-%m-%d')
         hora = "00:00:00-06:00"
         fecha_hora = fecha+'T'+hora
-        numero_acceso = factura.numero_acceso_fel if factura.numero_acceso_fel else str(factura.id+100000000)
-        DatosGenerales = etree.SubElement(DatosEmision, DTE_NS+"DatosGenerales", CodigoMoneda=moneda, FechaHoraEmision=fecha_hora, Tipo=tipo_documento_fel, NumeroAcceso=numero_acceso)
+        DatosGenerales = etree.SubElement(DatosEmision, DTE_NS+"DatosGenerales", CodigoMoneda=moneda, FechaHoraEmision=fecha_hora, Tipo=tipo_documento_fel)
+        if factura.contingencia_fel:
+            DatosGenerales.attrib['NumeroAcceso'] = str(factura.numero_acceso_fel)
         if factura.tipo_gasto == 'importacion':
             DatosGenerales.attrib['Exp'] = 'SI'
         if factura.company_id.tipo_personeria_fel:
@@ -264,6 +267,7 @@ class AccountMove(models.Model):
         gran_subtotal = 0
         gran_total = 0
         gran_total_impuestos = 0
+        gran_total_impuestos_extras = {}
         gran_num_lineas_sin_impuestos = 0
         self.descuento_lineas()
         
@@ -294,14 +298,18 @@ class AccountMove(models.Model):
 
                 for i in impuestos['taxes']:
                     impuesto = self.env['account.tax'].browse(i['id'])
-                    if impuesto.tipo_impuesto_fel:
-                        if (impuesto.tipo_impuesto_fel not in total_impuestos_extras) and (not factura.currency_id.is_zero(i['amount'])):
+                    if impuesto.tipo_impuesto_fel and not factura.currency_id.is_zero(i['amount']):
+                        if impuesto.tipo_impuesto_fel not in total_impuestos_extras:
                             total_impuestos_extras[impuesto.tipo_impuesto_fel] = {
                                 'tipo': impuesto.tipo_impuesto_fel,
                                 'codigo': impuesto.codigo_unidad_gravable_fel,
                                 'total': i['amount'],
                                 'base': i['base'],
                             }
+
+                        if impuesto.tipo_impuesto_fel not in gran_total_impuestos_extras:
+                            gran_total_impuestos_extras[impuesto.tipo_impuesto_fel] = { 'tipo': impuesto.tipo_impuesto_fel, 'total': 0 }
+                        gran_total_impuestos_extras[impuesto.tipo_impuesto_fel]['total'] += i['amount']
 
                         if not impuesto.price_include:
                             total_linea += i['amount']
@@ -363,7 +371,7 @@ class AccountMove(models.Model):
         if tipo_documento_fel not in ['NABN', 'RECI', 'RDON', 'FPEQ']:
             TotalImpuestos = etree.SubElement(Totales, DTE_NS+"TotalImpuestos")
             TotalImpuesto = etree.SubElement(TotalImpuestos, DTE_NS+"TotalImpuesto", NombreCorto="IVA", TotalMontoImpuesto='{:.6f}'.format(gran_total_impuestos))
-            for impuesto in total_impuestos_extras.values():
+            for impuesto in gran_total_impuestos_extras.values():
                 TotalImpuestoExtra = etree.SubElement(TotalImpuestos, DTE_NS+"TotalImpuesto", NombreCorto=impuesto['tipo'], TotalMontoImpuesto='{:.6f}'.format(impuesto['total']))
         GranTotal = etree.SubElement(Totales, DTE_NS+"GranTotal")
         GranTotal.text = '{:.6f}'.format(gran_total)
