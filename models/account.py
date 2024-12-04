@@ -308,7 +308,7 @@ class AccountMove(models.Model):
                             }
                             gran_total_impuestos_extras[impuesto.tipo_impuesto_fel] = { 'tipo': impuesto.tipo_impuesto_fel, 'total': 0 }
                         
-                        gran_total_impuestos_extras[impuesto.tipo_impuesto_fel] += i['amount']
+                        gran_total_impuestos_extras[impuesto.tipo_impuesto_fel]['total'] += i['amount']
 
                         if not impuesto.price_include:
                             total_linea += i['amount']
