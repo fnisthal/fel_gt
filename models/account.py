@@ -298,16 +298,17 @@ class AccountMove(models.Model):
 
                 for i in impuestos['taxes']:
                     impuesto = self.env['account.tax'].browse(i['id'])
-                    if impuesto.tipo_impuesto_fel:
-                        if (impuesto.tipo_impuesto_fel not in total_impuestos_extras) and (not factura.currency_id.is_zero(i['amount'])):
+                    if impuesto.tipo_impuesto_fel and not factura.currency_id.is_zero(i['amount']):
+                        if impuesto.tipo_impuesto_fel not in total_impuestos_extras:
                             total_impuestos_extras[impuesto.tipo_impuesto_fel] = {
                                 'tipo': impuesto.tipo_impuesto_fel,
                                 'codigo': impuesto.codigo_unidad_gravable_fel,
                                 'total': i['amount'],
                                 'base': i['base'],
                             }
+
+                        if impuesto.tipo_impuesto_fel not in gran_total_impuestos_extras:
                             gran_total_impuestos_extras[impuesto.tipo_impuesto_fel] = { 'tipo': impuesto.tipo_impuesto_fel, 'total': 0 }
-                        
                         gran_total_impuestos_extras[impuesto.tipo_impuesto_fel]['total'] += i['amount']
 
                         if not impuesto.price_include:
