@@ -9,9 +9,9 @@
     'website': 'http://aquih.com/',
     'depends': ['l10n_gt_extra'],
     'data': [
-        'views/account_view.xml',
-        'views/res_company_view.xml',
-        'views/partner_view.xml',
+        'views/account_views.xml',
+        'views/res_company_views.xml',
+        'views/res_partner_views.xml',
         'views/report_invoice.xml',
     ],
     'demo': [],
