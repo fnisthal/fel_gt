@@ -270,7 +270,7 @@ class AccountMove(models.Model):
         gran_num_lineas_sin_impuestos = 0
         self.descuento_lineas()
         
-        for linea in factura.invoice_line_ids:
+        for linea in factura.invoice_line_ids.sorted(key=lambda r: r.sequence):
 
             if linea.price_total == 0 and not factura.journal_id.enviar_lineas_en_cero_fel:
                 continue
