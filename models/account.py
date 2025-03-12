@@ -432,19 +432,19 @@ class AccountMove(models.Model):
 
                 total_iva_retencion = 0
                 
-                # Version 13, 14
-                if 'amount_by_group' in factura.fields_get():
-                    for impuesto in factura.amount_by_group:
-                        if impuesto[1] > 0:
-                            total_iva_retencion += impuesto[1]
-
-                # Version 15, 16
-                if 'tax_totals_json' in factura.fields_get() or 'tax_totals' in factura.fields_get():
-                    invoice_totals = json.loads(factura.tax_totals_json) if 'tax_totals_json' in factura.fields_get() else factura.tax_totals
-                    for grupos in invoice_totals['groups_by_subtotal'].values():
-                        for impuesto in grupos:
+                # Versión 17
+                if 'groups_by_subtotal' in factura.tax_totals:
+                    for subtotal in factura.tax_totals['groups_by_subtotal'].values():
+                        for impuesto in subtotal:
                             if impuesto['tax_group_amount'] > 0:
                                 total_iva_retencion += impuesto['tax_group_amount']
+
+                # Versión 18
+                if 'subtotals' in factura.tax_totals:
+                    for subtotal in factura.tax_totals['subtotals']:
+                        for impuesto in subtotal['tax_groups']:
+                            if impuesto['tax_amount'] > 0:
+                                total_iva_retencion += impuesto['tax_amount']
 
                 Complemento = etree.SubElement(Complementos, DTE_NS+"Complemento", IDComplemento="FacturaEspecial", NombreComplemento="FacturaEspecial", URIComplemento="http://www.sat.gob.gt/face2/ComplementoFacturaEspecial/0.1.0")
                 RetencionesFacturaEspecial = etree.SubElement(Complemento, CFE_NS+"RetencionesFacturaEspecial", Version="1", nsmap=NSMAP_FE)
