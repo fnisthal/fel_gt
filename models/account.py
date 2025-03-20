@@ -440,7 +440,7 @@ class AccountMove(models.Model):
                                 total_iva_retencion += impuesto['tax_group_amount']
 
                 # Versión 18
-                if 'subtotals' in factura.tax_totals:
+                else:
                     for subtotal in factura.tax_totals['subtotals']:
                         for impuesto in subtotal['tax_groups']:
                             if impuesto['tax_amount'] > 0:
