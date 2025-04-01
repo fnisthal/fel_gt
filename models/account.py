@@ -188,7 +188,7 @@ class AccountMove(models.Model):
         hora = "00:00:00-06:00"
         fecha_hora = fecha+'T'+hora
         DatosGenerales = etree.SubElement(DatosEmision, DTE_NS+"DatosGenerales", CodigoMoneda=moneda, FechaHoraEmision=fecha_hora, Tipo=tipo_documento_fel)
-        if factura.contingencia_fel:
+        if factura.contingencia_fel and factura.numero_acceso_fel > 0:
             DatosGenerales.attrib['NumeroAcceso'] = str(factura.numero_acceso_fel)
         if factura.tipo_gasto == 'importacion':
             DatosGenerales.attrib['Exp'] = 'SI'
