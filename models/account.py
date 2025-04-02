@@ -32,7 +32,6 @@ class AccountMove(models.Model):
     contingencia_fel = fields.Boolean('Contingencia FEL', copy=False)
     factura_original_id = fields.Many2one('account.move', string="Factura original FEL", domain="[('invoice_date', '!=', False)]")
     consignatario_fel = fields.Many2one('res.partner', string="Consignatario o Destinatario FEL")
-    comprador_fel = fields.Many2one('res.partner', string="Comprador FEL")
     exportador_fel = fields.Many2one('res.partner', string="Exportador FEL")
     lugar_expedicion_fel = fields.Char(string="Lugar Expedición FEL")
     incoterm_fel = fields.Char(string="Incoterm FEL")
@@ -189,7 +188,7 @@ class AccountMove(models.Model):
         hora = "00:00:00-06:00"
         fecha_hora = fecha+'T'+hora
         DatosGenerales = etree.SubElement(DatosEmision, DTE_NS+"DatosGenerales", CodigoMoneda=moneda, FechaHoraEmision=fecha_hora, Tipo=tipo_documento_fel)
-        if factura.contingencia_fel:
+        if factura.contingencia_fel and factura.numero_acceso_fel > 0:
             DatosGenerales.attrib['NumeroAcceso'] = str(factura.numero_acceso_fel)
         if factura.tipo_gasto == 'importacion':
             DatosGenerales.attrib['Exp'] = 'SI'
@@ -271,7 +270,7 @@ class AccountMove(models.Model):
         gran_num_lineas_sin_impuestos = 0
         self.descuento_lineas()
         
-        for linea in factura.invoice_line_ids:
+        for linea in factura.invoice_line_ids.sorted(key=lambda r: r.sequence):
 
             if linea.price_total == 0 and not factura.journal_id.enviar_lineas_en_cero_fel:
                 continue
@@ -289,7 +288,7 @@ class AccountMove(models.Model):
                 precio_unitario_base = linea.price_subtotal / linea.quantity
             total_linea = precio_unitario * linea.quantity
             total_linea_base = precio_unitario_base * linea.quantity
-            total_impuestos = total_linea - total_linea_base
+            total_impuestos = tools.float_round(total_linea - total_linea_base, precision_rounding=factura.currency_id.rounding)
             
             total_impuestos_extras = {}
             
@@ -353,7 +352,7 @@ class AccountMove(models.Model):
                     CodigoUnidadGravable.text = str(impuesto['codigo'])
                     if impuesto['tipo'] != 'PETROLEO':
                         MontoGravable = etree.SubElement(Impuesto, DTE_NS+"MontoGravable")
-                        MontoGravable.text = '{:.6f}'.format(impuesto['total'])
+                        MontoGravable.text = '{:.6f}'.format(impuesto['base'])
                     else:
                         CantidadUnidadesGravables = etree.SubElement(Impuesto, DTE_NS+"CantidadUnidadesGravables")
                         CantidadUnidadesGravables.text = '{:.{p}f}'.format(linea.quantity, p=self.env['decimal.precision'].precision_get('Product Unit of Measure'))
@@ -433,19 +432,19 @@ class AccountMove(models.Model):
 
                 total_iva_retencion = 0
                 
-                # Version 13, 14
-                if 'amount_by_group' in factura.fields_get():
-                    for impuesto in factura.amount_by_group:
-                        if impuesto[1] > 0:
-                            total_iva_retencion += impuesto[1]
-
-                # Version 15, 16
-                if 'tax_totals_json' in factura.fields_get() or 'tax_totals' in factura.fields_get():
-                    invoice_totals = json.loads(factura.tax_totals_json) if 'tax_totals_json' in factura.fields_get() else factura.tax_totals
-                    for grupos in invoice_totals['groups_by_subtotal'].values():
-                        for impuesto in grupos:
+                # Versión 17
+                if 'groups_by_subtotal' in factura.tax_totals:
+                    for subtotal in factura.tax_totals['groups_by_subtotal'].values():
+                        for impuesto in subtotal:
                             if impuesto['tax_group_amount'] > 0:
                                 total_iva_retencion += impuesto['tax_group_amount']
+
+                # Versión 18
+                else:
+                    for subtotal in factura.tax_totals['subtotals']:
+                        for impuesto in subtotal['tax_groups']:
+                            if impuesto['tax_amount'] > 0:
+                                total_iva_retencion += impuesto['tax_amount']
 
                 Complemento = etree.SubElement(Complementos, DTE_NS+"Complemento", IDComplemento="FacturaEspecial", NombreComplemento="FacturaEspecial", URIComplemento="http://www.sat.gob.gt/face2/ComplementoFacturaEspecial/0.1.0")
                 RetencionesFacturaEspecial = etree.SubElement(Complemento, CFE_NS+"RetencionesFacturaEspecial", Version="1", nsmap=NSMAP_FE)
