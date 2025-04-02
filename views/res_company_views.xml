@@ -6,11 +6,12 @@
         <field name="model">res.company</field>
         <field name="inherit_id" ref="base.view_company_form"/>
         <field name="arch" type="xml">
-            <data>
+            
                 <notebook position="inside">
                     <page string="Extra">
                         <group string="FEL">
                             <group>
+                                <field name="nombre_comercial"/>
                                 <field name="certificador_fel"/>
                                 <field name="afiliacion_iva_fel"/>
                                 <field name="tipo_personeria_fel"/>
@@ -20,7 +21,7 @@
                         </group>
                     </page>
                 </notebook>
-            </data>
+            
         </field>
     </record>
         
