@@ -196,7 +196,7 @@ class AccountMove(models.Model):
         if factura.company_id.tipo_personeria_fel:
             DatosGenerales.attrib['TipoPersoneria'] = str(factura.company_id.tipo_personeria_fel)
 
-        Emisor = etree.SubElement(DatosEmision, DTE_NS+"Emisor", AfiliacionIVA=factura.company_id.afiliacion_iva_fel or "GEN", CodigoEstablecimiento=str(factura.journal_id.codigo_establecimiento), CorreoEmisor=factura.company_id.email or '', NITEmisor=factura.company_id.vat.replace('-',''), NombreComercial=factura.journal_id.direccion.name, NombreEmisor=factura.company_id.name)
+        Emisor = etree.SubElement(DatosEmision, DTE_NS+"Emisor", AfiliacionIVA=factura.company_id.afiliacion_iva_fel or "GEN", CodigoEstablecimiento=str(factura.journal_id.codigo_establecimiento), CorreoEmisor=factura.company_id.email or '', NITEmisor=factura.company_id.vat.replace('-',''), NombreComercial=factura.company_id.nombre_comercial, NombreEmisor=factura.company_id.name)
         DireccionEmisor = etree.SubElement(Emisor, DTE_NS+"DireccionEmisor")
         Direccion = etree.SubElement(DireccionEmisor, DTE_NS+"Direccion")
         Direccion.text = factura.journal_id.direccion.street or 'Ciudad'
