@@ -280,40 +280,39 @@ class AccountMove(models.Model):
             tipo_producto = "B"
             if linea.product_id.type == 'service':
                 tipo_producto = "S"
+            
             precio_unitario = linea.price_unit * (100-linea.discount) / 100
             precio_sin_descuento = linea.price_unit
             descuento = (precio_sin_descuento * linea.quantity) - (precio_unitario * linea.quantity)
-            precio_unitario_base = precio_unitario
-            if linea.price_total != linea.price_subtotal:
-                precio_unitario_base = linea.price_subtotal / linea.quantity
-            total_linea = precio_unitario * linea.quantity
-            total_linea_base = precio_unitario_base * linea.quantity
-            total_impuestos = tools.float_round(total_linea - total_linea_base, precision_rounding=factura.currency_id.rounding)
-            
+
+            impuestos = linea.tax_ids.compute_all(precio_unitario, currency=factura.currency_id, quantity=linea.quantity, product=linea.product_id, partner=factura.partner_id)
+
+            total_linea = impuestos['total_included']
+            total_linea_base = impuestos['total_excluded']
+
+            total_impuestos = 0
             total_impuestos_extras = {}
             
-            if len(linea.tax_ids) > 1:
-                impuestos = linea.tax_ids.compute_all(precio_unitario, currency=factura.currency_id, quantity=linea.quantity, product=linea.product_id, partner=factura.partner_id)
-
+            if len(linea.tax_ids) > 0:
                 for i in impuestos['taxes']:
                     impuesto = self.env['account.tax'].browse(i['id'])
-                    if impuesto.tipo_impuesto_fel and not factura.currency_id.is_zero(i['amount']):
-                        if impuesto.tipo_impuesto_fel not in total_impuestos_extras:
-                            total_impuestos_extras[impuesto.tipo_impuesto_fel] = {
-                                'tipo': impuesto.tipo_impuesto_fel,
-                                'codigo': impuesto.codigo_unidad_gravable_fel,
-                                'total': i['amount'],
-                                'base': i['base'],
-                            }
+                    if not factura.currency_id.is_zero(i['amount']):
+                        if impuesto.tipo_impuesto_fel:
+                            if impuesto.tipo_impuesto_fel not in total_impuestos_extras:
+                                total_impuestos_extras[impuesto.tipo_impuesto_fel] = {
+                                    'tipo': impuesto.tipo_impuesto_fel,
+                                    'codigo': impuesto.codigo_unidad_gravable_fel,
+                                    'total': i['amount'],
+                                    'base': i['base'],
+                                }
 
-                        if impuesto.tipo_impuesto_fel not in gran_total_impuestos_extras:
-                            gran_total_impuestos_extras[impuesto.tipo_impuesto_fel] = { 'tipo': impuesto.tipo_impuesto_fel, 'total': 0 }
-                        gran_total_impuestos_extras[impuesto.tipo_impuesto_fel]['total'] += i['amount']
-
-                        if not impuesto.price_include:
-                            total_linea += i['amount']
+                            if impuesto.tipo_impuesto_fel not in gran_total_impuestos_extras:
+                                gran_total_impuestos_extras[impuesto.tipo_impuesto_fel] = { 'tipo': impuesto.tipo_impuesto_fel, 'total': 0 }
+                            gran_total_impuestos_extras[impuesto.tipo_impuesto_fel]['total'] += i['amount']
+                        
+                        # Cualquier impuesto que no tenga configuración FEL se toma como IVA
                         else:
-                            total_impuestos -= i['amount']
+                            total_impuestos += i['amount']
                 
             if factura.currency_id.is_zero(total_impuestos) and total_linea != 0:
                 gran_num_lineas_sin_impuestos += 1
