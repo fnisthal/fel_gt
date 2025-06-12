@@ -310,8 +310,8 @@ class AccountMove(models.Model):
                                 gran_total_impuestos_extras[impuesto.tipo_impuesto_fel] = { 'tipo': impuesto.tipo_impuesto_fel, 'total': 0 }
                             gran_total_impuestos_extras[impuesto.tipo_impuesto_fel]['total'] += i['amount']
                         
-                        # Cualquier impuesto que no tenga configuración FEL se toma como IVA
-                        else:
+                        # Cualquier impuesto positivo que no tenga configuración FEL se toma como IVA
+                        elif i['amount'] > 0:
                             total_impuestos += i['amount']
                 
             if factura.currency_id.is_zero(total_impuestos) and total_linea != 0:
