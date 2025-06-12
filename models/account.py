@@ -313,6 +313,10 @@ class AccountMove(models.Model):
                         # Cualquier impuesto positivo que no tenga configuración FEL se toma como IVA
                         elif i['amount'] > 0:
                             total_impuestos += i['amount']
+
+                        # Las retenciones se deben sumar al total de la linea
+                        elif i['amount'] < 0:
+                            total_linea += abs(i['amount'])
                 
             if factura.currency_id.is_zero(total_impuestos) and total_linea != 0:
                 gran_num_lineas_sin_impuestos += 1
