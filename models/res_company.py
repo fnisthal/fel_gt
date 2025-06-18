@@ -14,7 +14,7 @@ class ResCompany(models.Model):
     frases_fel = fields.Text('Frases FEL')
     adenda_fel = fields.Text('Adenda FEL')
 
-    # 🔒 Restricción para validar que el nombre comercial esté definido
+    # Restricción para validar que el nombre comercial esté definido
     @api.constrains('nombre_comercial', 'certificador_fel')
     def _check_nombre_comercial_fel(self):
         for rec in self:

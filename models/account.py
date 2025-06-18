@@ -90,7 +90,8 @@ class AccountMove(models.Model):
         descr = {}
         nuevos_valores_lineas = []
         for linea in factura.invoice_line_ids:
-            descr[linea.id] = linea.name
+            descr[linea.id] = self.construir_descripcion_fel(linea)
+            #descr[linea.id] = linea.name  Sustituyo por la funcion construir_descripcion_fel
 
         for linea in factura.invoice_line_ids:
             if linea.price_total > 0:
@@ -324,7 +325,8 @@ class AccountMove(models.Model):
             UnidadMedida = etree.SubElement(Item, DTE_NS+"UnidadMedida")
             UnidadMedida.text = linea.product_uom_id.name[0:3] if linea.product_uom_id else 'UNI'
             Descripcion = etree.SubElement(Item, DTE_NS+"Descripcion")
-            Descripcion.text = linea.name
+            Descripcion.text = self.construir_descripcion_fel(linea)
+            # Descripcion.text = linea.name  Sustituyo por la funcion construir_descripcion_fel
             PrecioUnitario = etree.SubElement(Item, DTE_NS+"PrecioUnitario")
             PrecioUnitario.text = '{:.6f}'.format(precio_sin_descuento)
             Precio = etree.SubElement(Item, DTE_NS+"Precio")
@@ -533,6 +535,48 @@ class AccountMove(models.Model):
         DatosGenerales = etree.SubElement(AnulacionDTE, DTE_NS+"DatosGenerales", ID="DatosAnulacion", NumeroDocumentoAAnular=factura.firma_fel, NITEmisor=factura.company_id.vat.replace("-",""), IDReceptor=nit_receptor, FechaEmisionDocumentoAnular=fecha_hora, FechaHoraAnulacion=fecha_hoy_hora, MotivoAnulacion=factura.motivo_fel or '-')
         
         return GTAnulacionDocumento
+    
+    # Agrego opciones para armar la descripción de cada línea de la factura
+    def construir_descripcion_fel(self, linea):
+        parts = []
+        journal = linea.move_id.journal_id
+        product = linea.product_id
+
+        if not product:
+            return re.sub(r'\s+', ' ', linea.name or '').strip()
+
+        if (
+            not journal.incluir_referencia_producto_fel
+            and not journal.incluir_nombre_producto_fel
+            and not journal.incluir_descripcion_venta_fel
+            and not journal.incluir_descripcion_adicional_fel
+        ):
+            # Fallback: usar nombre del producto como mínimo
+            return product.name or 'Producto sin nombre'
+
+        if journal.incluir_referencia_producto_fel and product.default_code:
+            parts.append(f"[{product.default_code}]")
+
+        if journal.incluir_nombre_producto_fel:
+            parts.append(product.name)
+
+        if journal.incluir_descripcion_venta_fel and product.sale_description:
+            parts.append(product.sale_description)
+
+        if journal.incluir_descripcion_adicional_fel:
+            descripcion_adicional = self._extra_description_from_line(linea)
+            if descripcion_adicional:
+                parts.append(descripcion_adicional)
+
+        return re.sub(r'\s+', ' ', " ".join(parts)).strip()
+
+    def _extra_description_from_line(self, linea):
+        """Detecta si hay descripción adicional escrita manualmente"""
+        if linea.name and '\n' in linea.name:
+            partes = linea.name.splitlines()
+            return "\n".join(partes[1:])  # omite la primera línea
+        return ''
+
 
 class AccountJournal(models.Model):
     _inherit = "account.journal"
@@ -544,6 +588,10 @@ class AccountJournal(models.Model):
     invoice_reference_type = fields.Selection(selection_add=[('fel', 'FEL')], ondelete=({'fel': 'set default'} if version_info[0] > 13 else ''))
     no_usar_descuento_fel = fields.Boolean('No usar descuento cuando hay lineas negativas en FEL')
     enviar_lineas_en_cero_fel = fields.Boolean('Enviar lineas en cero para FEL')
+    incluir_referencia_producto_fel = fields.Boolean('Incluir referencia interna del producto')
+    incluir_nombre_producto_fel = fields.Boolean('Incluir nombre del producto')
+    incluir_descripcion_adicional_fel = fields.Boolean('Incluir descripción adicional')
+    incluir_descripcion_venta_fel = fields.Boolean('Incluir descripción de venta del producto')
 
 class AccountTax(models.Model):
     _inherit = 'account.tax'
