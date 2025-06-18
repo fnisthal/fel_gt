@@ -545,8 +545,6 @@ class AccountMove(models.Model):
         if not product:
             return re.sub(r'\s+', ' ', linea.name or '').strip()
         
-        tmpl = product.product_tmpl_id
-
         if (
             not journal.incluir_referencia_producto_fel
             and not journal.incluir_nombre_producto_fel
@@ -561,9 +559,6 @@ class AccountMove(models.Model):
 
         if journal.incluir_nombre_producto_fel:
             parts.append(product.name)
-
-        if journal.incluir_descripcion_venta_fel and hasattr(tmpl, 'sale_description') and tmpl.sale_description:
-            parts.append(tmpl.sale_description)
 
         if journal.incluir_descripcion_adicional_fel:
             descripcion_adicional = self._extra_description_from_line(linea)
@@ -593,7 +588,6 @@ class AccountJournal(models.Model):
     incluir_referencia_producto_fel = fields.Boolean('Incluir referencia interna del producto')
     incluir_nombre_producto_fel = fields.Boolean('Incluir nombre del producto')
     incluir_descripcion_adicional_fel = fields.Boolean('Incluir descripción adicional')
-    incluir_descripcion_venta_fel = fields.Boolean('Incluir descripción de venta del producto')
 
 class AccountTax(models.Model):
     _inherit = 'account.tax'

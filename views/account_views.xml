@@ -58,7 +58,6 @@
                         <group string="Descripción de línea en FEL">
                             <field name="incluir_referencia_producto_fel"/>
                             <field name="incluir_nombre_producto_fel"/>
-                            <field name="incluir_descripcion_venta_fel"/>
                             <field name="incluir_descripcion_adicional_fel"/>
                         </group>
                     </group>
