@@ -135,7 +135,7 @@ class AccountMove(models.Model):
         return True
 
     def eliminar_etiquetas(self, texto_html):
-        return html.fromstring(texto_html).text_content()
+        return html.fromstring(texto_html or "-").text_content()
 
     def dte_documento(self):
         self.ensure_one()
