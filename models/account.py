@@ -52,10 +52,12 @@ class AccountMove(models.Model):
     def num_a_letras(self, amount):
         return a_letras.num_a_letras(amount,completo=True)
 
-    def error_certificador(self, error):
+    def error_certificador(self, error, contingencia=True):
         self.ensure_one()
         factura = self
-        factura.contingencia_fel = True
+
+        factura.contingencia_fel = contingencia
+
         if factura.journal_id.error_en_historial_fel:
             factura.message_post(body='<p>No se publicó la factura por error del certificador FEL:</p> <p><strong>'+error+'</strong></p>')
         else:
@@ -73,7 +75,10 @@ class AccountMove(models.Model):
         self.ensure_one()
         factura = self
         if factura.firma_fel:
-            factura.error_certificador("La factura ya fue validada, por lo que no puede ser validada nuevamente")
+
+            # Este error no debe marcar la factura como contingencia. Por que es una factura
+            # ya firmada.
+            factura.error_certificador("La factura ya fue validada, por lo que no puede ser validada nuevamente", contingencia=False)
             return True
 
         return False
