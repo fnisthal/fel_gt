@@ -43,6 +43,7 @@ class AccountMove(models.Model):
     resultado_xml_fel = fields.Binary('Resultado XML FEL', copy=False)
     resultado_xml_fel_name = fields.Char('Nombre resultado XML FEL', default='resultado_xml_fel.xml', size=32)
     certificador_fel = fields.Char('Certificador FEL', copy=False)
+    uuid_pos_fel = fields.Char('UUID FEL', copy=False)
     
     def _get_invoice_reference_odoo_fel(self):
         """ Usa el numero FEL
