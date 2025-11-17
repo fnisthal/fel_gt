@@ -278,7 +278,7 @@ class AccountMove(models.Model):
         
         for linea in factura.invoice_line_ids.sorted(key=lambda r: r.sequence):
 
-            if linea.price_total == 0 and not factura.journal_id.enviar_lineas_en_cero_fel:
+            if factura.currency_id.is_zero(linea.price_total) and not factura.journal_id.enviar_lineas_en_cero_fel:
                 continue
 
             linea_num += 1
