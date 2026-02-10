@@ -60,7 +60,7 @@ class AccountMove(models.Model):
         if factura.journal_id.error_en_historial_fel:
             factura.message_post(body='<p>No se publicó la factura por error del certificador FEL:</p> <p><strong>'+error+'</strong></p>')
         else:
-            raise UserError('No se publicó la factura por error del certificador FEL: '+error)
+            raise ValidationError('No se publicó la factura por error del certificador FEL: '+error)
 
     def requiere_certificacion(self, certificador=''):
         self.ensure_one()
@@ -543,7 +543,7 @@ class AccountJournal(models.Model):
 
     generar_fel = fields.Boolean('Generar FEL')
     tipo_documento_fel = fields.Selection([('FACT', 'FACT'), ('FCAM', 'FCAM'), ('FPEQ', 'FPEQ'), ('FCAP', 'FCAP'), ('FESP', 'FESP'), ('NABN', 'NABN'), ('RDON', 'RDON'), ('RECI', 'RECI'), ('NDEB', 'NDEB'), ('NCRE', 'NCRE')], 'Tipo de Documento FEL', copy=False)
-    error_en_historial_fel = fields.Boolean('Error FEL en historial', help='Los errores no se muestran en pantalla, solo se registran en el historial')
+    error_en_historial_fel = fields.Boolean('Registrar error FEL en historial', help='Los errores no se muestran en pantalla, solo se registran en el historial')
     invoice_reference_type = fields.Selection(selection_add=[('fel', 'FEL')], ondelete=({'fel': 'set default'} if version_info[0] > 13 else ''))
     no_usar_descuento_fel = fields.Boolean('No usar descuento cuando hay lineas negativas en FEL')
     enviar_lineas_en_cero_fel = fields.Boolean('Enviar lineas en cero para FEL')
