@@ -53,11 +53,9 @@ class AccountMove(models.Model):
     def num_a_letras(self, amount):
         return a_letras.num_a_letras(amount,completo=True)
 
-    def error_certificador(self, error, contingencia=True):
+    def error_certificador(self, error):
         self.ensure_one()
         factura = self
-
-        factura.contingencia_fel = contingencia
 
         if factura.journal_id.error_en_historial_fel:
             factura.message_post(body='<p>No se publicó la factura por error del certificador FEL:</p> <p><strong>'+error+'</strong></p>')
@@ -76,10 +74,7 @@ class AccountMove(models.Model):
         self.ensure_one()
         factura = self
         if factura.firma_fel:
-
-            # Este error no debe marcar la factura como contingencia. Por que es una factura
-            # ya firmada.
-            factura.error_certificador("La factura ya fue validada, por lo que no puede ser validada nuevamente", contingencia=False)
+            factura.error_certificador("La factura ya fue validada, por lo que no puede ser validada nuevamente")
             return True
 
         return False
@@ -549,7 +544,6 @@ class AccountJournal(models.Model):
     generar_fel = fields.Boolean('Generar FEL')
     tipo_documento_fel = fields.Selection([('FACT', 'FACT'), ('FCAM', 'FCAM'), ('FPEQ', 'FPEQ'), ('FCAP', 'FCAP'), ('FESP', 'FESP'), ('NABN', 'NABN'), ('RDON', 'RDON'), ('RECI', 'RECI'), ('NDEB', 'NDEB'), ('NCRE', 'NCRE')], 'Tipo de Documento FEL', copy=False)
     error_en_historial_fel = fields.Boolean('Error FEL en historial', help='Los errores no se muestran en pantalla, solo se registran en el historial')
-    contingencia_fel = fields.Boolean('Habilitar contingencia FEL')
     invoice_reference_type = fields.Selection(selection_add=[('fel', 'FEL')], ondelete=({'fel': 'set default'} if version_info[0] > 13 else ''))
     no_usar_descuento_fel = fields.Boolean('No usar descuento cuando hay lineas negativas en FEL')
     enviar_lineas_en_cero_fel = fields.Boolean('Enviar lineas en cero para FEL')

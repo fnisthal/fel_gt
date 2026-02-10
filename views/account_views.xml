@@ -51,7 +51,6 @@
                             <field name="error_en_historial_fel"/>
                         </group>
                         <group>
-                            <field name="contingencia_fel"/>
                             <field name="no_usar_descuento_fel"/>
                             <field name="enviar_lineas_en_cero_fel"/>
                         </group>
