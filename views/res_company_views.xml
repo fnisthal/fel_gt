@@ -8,8 +8,8 @@
         <field name="arch" type="xml">
             <data>
                 <notebook position="inside">
-                    <page string="Extra">
-                        <group string="FEL">
+                    <page string="FEL">
+                        <group string="FEL Guatemala">
                             <group>
                                 <field name="certificador_fel"/>
                                 <field name="afiliacion_iva_fel"/>
