@@ -298,7 +298,7 @@ class AccountMove(models.Model):
                 for i in impuestos['taxes']:
                     impuesto = self.env['account.tax'].browse(i['id'])
                     if not factura.currency_id.is_zero(i['amount']):
-                        if impuesto.tipo_impuesto_fel:
+                        if not impuesto.tipo_impuesto_fel or impuesto.tipo_impuesto_fel != 'IVA':
                             if impuesto.tipo_impuesto_fel not in total_impuestos_extras:
                                 total_impuestos_extras[impuesto.tipo_impuesto_fel] = {
                                     'tipo': impuesto.tipo_impuesto_fel,
@@ -310,9 +310,7 @@ class AccountMove(models.Model):
                             if impuesto.tipo_impuesto_fel not in gran_total_impuestos_extras:
                                 gran_total_impuestos_extras[impuesto.tipo_impuesto_fel] = { 'tipo': impuesto.tipo_impuesto_fel, 'total': 0 }
                             gran_total_impuestos_extras[impuesto.tipo_impuesto_fel]['total'] += i['amount']
-                        
-                        # Cualquier impuesto positivo que no tenga configuración FEL se toma como IVA
-                        elif i['amount'] > 0:
+                        else i['amount'] > 0:
                             total_impuestos += i['amount']
 
                         # Las retenciones se deben sumar al total de la linea
