@@ -2,7 +2,6 @@
 
 from odoo import models, fields, api, tools, _
 from odoo.exceptions import UserError, ValidationError
-from odoo.release import version_info
 
 from lxml import etree, html
 from datetime import datetime
@@ -136,7 +135,7 @@ class AccountMove(models.Model):
         return True
 
     def eliminar_etiquetas(self, texto_html):
-        return html.fromstring(texto_html).text_content()
+        return html.fromstring(texto_html or '-').text_content()
 
     def dte_documento(self):
         self.ensure_one()
@@ -177,7 +176,7 @@ class AccountMove(models.Model):
         DatosEmision = etree.SubElement(DTE, DTE_NS+"DatosEmision", ID="DatosEmision")
 
         tipo_documento_fel = factura.journal_id.tipo_documento_fel
-        tipo_interno_factura = factura.type if 'type' in factura.fields_get() else factura.move_type
+        tipo_interno_factura = factura.move_type
         if tipo_documento_fel in ['FACT', 'FCAM'] and tipo_interno_factura == 'out_refund':
             tipo_documento_fel = 'NCRE'
 
@@ -185,7 +184,7 @@ class AccountMove(models.Model):
         if factura.currency_id.id != factura.company_id.currency_id.id:
             moneda = "USD"
 
-        fecha = factura.invoice_date.strftime('%Y-%m-%d') if factura.invoice_date else fields.Date.context_today(self).strftime('%Y-%m-%d')
+        fecha = factura.invoice_date.strftime('%Y-%m-%d') if factura.invoice_date else fields.Date.today().strftime('%Y-%m-%d')
         hora = "00:00:00-06:00"
         fecha_hora = fecha+'T'+hora
         DatosGenerales = etree.SubElement(DatosEmision, DTE_NS+"DatosGenerales", CodigoMoneda=moneda, FechaHoraEmision=fecha_hora, Tipo=tipo_documento_fel)
@@ -196,7 +195,7 @@ class AccountMove(models.Model):
         if factura.company_id.tipo_personeria_fel:
             DatosGenerales.attrib['TipoPersoneria'] = str(factura.company_id.tipo_personeria_fel)
 
-        Emisor = etree.SubElement(DatosEmision, DTE_NS+"Emisor", AfiliacionIVA=factura.company_id.afiliacion_iva_fel or "GEN", CodigoEstablecimiento=str(factura.journal_id.codigo_establecimiento), CorreoEmisor=factura.company_id.email or '', NITEmisor=factura.company_id.vat.replace('-',''), NombreComercial=factura.company_id.nombre_comercial, NombreEmisor=factura.company_id.name)
+        Emisor = etree.SubElement(DatosEmision, DTE_NS+"Emisor", AfiliacionIVA=factura.company_id.afiliacion_iva_fel or "GEN", CodigoEstablecimiento=str(factura.journal_id.codigo_establecimiento), CorreoEmisor=factura.company_id.email or '', NITEmisor=factura.company_id.vat.replace('-',''), NombreComercial=factura.company_id.nombre_comercial or factura.company_id.name, NombreEmisor=factura.company_id.name)
         DireccionEmisor = etree.SubElement(Emisor, DTE_NS+"DireccionEmisor")
         Direccion = etree.SubElement(DireccionEmisor, DTE_NS+"Direccion")
         Direccion.text = factura.journal_id.direccion.street or 'Ciudad'
@@ -244,13 +243,15 @@ class AccountMove(models.Model):
         Pais = etree.SubElement(DireccionReceptor, DTE_NS+"Pais")
         Pais.text = factura.partner_id.country_id.code or 'GT'
 
-        if 'dte:Frases' in factura.company_id.frases_fel:
+        frases_fel = factura.company_id.frases_fel or ''
+        if 'dte:Frases' in frases_fel:
             Frases = etree.fromstring(factura.company_id.frases_fel)
         else:
             Frases = etree.Element(DTE_NS+'Frases')
-            def frase(tipo=0, escenario=0):
-                etree.SubElement(Frases, DTE_NS+'Frase', TipoFrase=str(tipo), CodigoEscenario=str(escenario))
-            exec(factura.company_id.frases_fel, {'etree': etree, 'Frases': Frases, 'DTE_NS': DTE_NS, 'factura': factura, 'frase': frase})
+            if frases_fel:
+                def frase(tipo=0, escenario=0):
+                    etree.SubElement(Frases, DTE_NS+'Frase', TipoFrase=str(tipo), CodigoEscenario=str(escenario))
+                exec(frases_fel, {'etree': etree, 'Frases': Frases, 'DTE_NS': DTE_NS, 'factura': factura, 'frase': frase})
             
         if tipo_documento_fel in ['NABN', 'FESP', 'RECI', 'RDON']:
             frase_isr = Frases.find('.//*[@TipoFrase="1"]')
@@ -513,7 +514,7 @@ class AccountMove(models.Model):
         DS_NS = "{http://www.w3.org/2000/09/xmldsig#}"
     
         tipo_documento_fel = factura.journal_id.tipo_documento_fel
-        tipo_interno_factura = factura.type if 'type' in factura.fields_get() else factura.move_type
+        tipo_interno_factura = factura.move_type
         if tipo_documento_fel in ['FACT', 'FACM'] and tipo_interno_factura == 'out_refund':
             tipo_documento_fel = 'NCRE'
 
@@ -523,11 +524,11 @@ class AccountMove(models.Model):
         if tipo_documento_fel == "FESP" and factura.partner_id.cui:
             nit_receptor = factura.partner_id.cui
 
-        fecha = fields.Date.from_string(factura.invoice_date).strftime('%Y-%m-%d')
+        fecha = factura.invoice_date.strftime('%Y-%m-%d') if factura.invoice_date else fields.Date.today().strftime('%Y-%m-%d')
         hora = "00:00:00-06:00"
         fecha_hora = fecha+'T'+hora
         
-        fecha_hoy_hora = fields.Date.context_today(factura).strftime('%Y-%m-%dT%H:%M:%S')
+        fecha_hoy_hora = datetime.now().strftime('%Y-%m-%dT%H:%M:%S')
 
         GTAnulacionDocumento = etree.Element(DTE_NS+"GTAnulacionDocumento", {}, Version="0.1", nsmap=NSMAP)
         SAT = etree.SubElement(GTAnulacionDocumento, DTE_NS+"SAT")
@@ -548,7 +549,6 @@ class AccountMove(models.Model):
         if (
             not journal.incluir_referencia_producto_fel
             and not journal.incluir_nombre_producto_fel
-            and not journal.incluir_descripcion_venta_fel
             and not journal.incluir_descripcion_adicional_fel
         ):
             # Fallback: usar nombre del producto como mínimo
@@ -582,7 +582,7 @@ class AccountJournal(models.Model):
     tipo_documento_fel = fields.Selection([('FACT', 'FACT'), ('FCAM', 'FCAM'), ('FPEQ', 'FPEQ'), ('FCAP', 'FCAP'), ('FESP', 'FESP'), ('NABN', 'NABN'), ('RDON', 'RDON'), ('RECI', 'RECI'), ('NDEB', 'NDEB'), ('NCRE', 'NCRE')], 'Tipo de Documento FEL', copy=False)
     error_en_historial_fel = fields.Boolean('Error FEL en historial', help='Los errores no se muestran en pantalla, solo se registran en el historial')
     contingencia_fel = fields.Boolean('Habilitar contingencia FEL')
-    invoice_reference_type = fields.Selection(selection_add=[('fel', 'FEL')], ondelete=({'fel': 'set default'} if version_info[0] > 13 else ''))
+    invoice_reference_type = fields.Selection(selection_add=[('fel', 'FEL')])
     no_usar_descuento_fel = fields.Boolean('No usar descuento cuando hay lineas negativas en FEL')
     enviar_lineas_en_cero_fel = fields.Boolean('Enviar lineas en cero para FEL')
     incluir_referencia_producto_fel = fields.Boolean('Incluir referencia interna del producto')
