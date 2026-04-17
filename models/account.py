@@ -29,19 +29,20 @@ class AccountMove(models.Model):
     numero_fel = fields.Char('Numero FEL', copy=False)
     numero_acceso_fel = fields.Integer('Numero Acceso FEL', copy=False)
     contingencia_fel = fields.Boolean('Contingencia FEL', copy=False)
-    factura_original_id = fields.Many2one('account.move', string="Factura original FEL", domain="[('invoice_date', '!=', False)]")
-    consignatario_fel = fields.Many2one('res.partner', string="Consignatario o Destinatario FEL")
-    exportador_fel = fields.Many2one('res.partner', string="Exportador FEL")
-    lugar_expedicion_fel = fields.Char(string="Lugar Expedición FEL")
-    incoterm_fel = fields.Char(string="Incoterm FEL")
-    otra_referencia_fel = fields.Char(string="Otra Referencia FEL")
-    frase_exento_fel = fields.Integer('Frase Exento FEL')
+    factura_original_id = fields.Many2one('account.move', string='Factura original FEL', domain="[('invoice_date', '!=', False)]")
+    consignatario_fel = fields.Many2one('res.partner', string='Consignatario o Destinatario FEL')
+    exportador_fel = fields.Many2one('res.partner', string='Exportador FEL')
+    lugar_expedicion_fel = fields.Char(string='Lugar Expedición FEL')
+    incoterm_fel = fields.Char(string='Incoterm FEL')
+    otra_referencia_fel = fields.Char(string='Otra Referencia FEL')
+    frase_exento_fel = fields.Integer('Escenario Exento FEL')
     motivo_fel = fields.Char(string='Motivo FEL')
     documento_xml_fel = fields.Binary('Documento XML FEL', copy=False)
     documento_xml_fel_name = fields.Char('Nombre documento XML FEL', default='documento_xml_fel.xml', size=32)
     resultado_xml_fel = fields.Binary('Resultado XML FEL', copy=False)
     resultado_xml_fel_name = fields.Char('Nombre resultado XML FEL', default='resultado_xml_fel.xml', size=32)
     certificador_fel = fields.Char('Certificador FEL', copy=False)
+    uuid_pos_fel = fields.Char('UUID FEL', copy=False)
     
     def _get_invoice_reference_odoo_fel(self):
         """ Usa el numero FEL
@@ -54,11 +55,11 @@ class AccountMove(models.Model):
     def error_certificador(self, error):
         self.ensure_one()
         factura = self
-        factura.contingencia_fel = True
+
         if factura.journal_id.error_en_historial_fel:
             factura.message_post(body='<p>No se publicó la factura por error del certificador FEL:</p> <p><strong>'+error+'</strong></p>')
         else:
-            raise UserError('No se publicó la factura por error del certificador FEL: '+error)
+            raise ValidationError('No se publicó la factura por error del certificador FEL: '+error)
 
     def requiere_certificacion(self, certificador=''):
         self.ensure_one()
@@ -274,7 +275,7 @@ class AccountMove(models.Model):
         
         for linea in factura.invoice_line_ids.sorted(key=lambda r: r.sequence):
 
-            if linea.price_total == 0 and not factura.journal_id.enviar_lineas_en_cero_fel:
+            if factura.currency_id.is_zero(linea.price_total) and not factura.journal_id.enviar_lineas_en_cero_fel:
                 continue
 
             linea_num += 1
@@ -282,40 +283,43 @@ class AccountMove(models.Model):
             tipo_producto = "B"
             if linea.product_id.type == 'service':
                 tipo_producto = "S"
+            
             precio_unitario = linea.price_unit * (100-linea.discount) / 100
             precio_sin_descuento = linea.price_unit
             descuento = (precio_sin_descuento * linea.quantity) - (precio_unitario * linea.quantity)
-            precio_unitario_base = precio_unitario
-            if linea.price_total != linea.price_subtotal:
-                precio_unitario_base = linea.price_subtotal / linea.quantity
-            total_linea = precio_unitario * linea.quantity
-            total_linea_base = precio_unitario_base * linea.quantity
-            total_impuestos = tools.float_round(total_linea - total_linea_base, precision_rounding=factura.currency_id.rounding)
-            
+
+            impuestos = linea.tax_ids.compute_all(precio_unitario, currency=factura.currency_id, quantity=linea.quantity, product=linea.product_id, partner=factura.partner_id)
+
+            total_linea = impuestos['total_included']
+            total_linea_base = impuestos['total_excluded']
+
+            total_impuestos = 0
             total_impuestos_extras = {}
             
-            if len(linea.tax_ids) > 1:
-                impuestos = linea.tax_ids.compute_all(precio_unitario, currency=factura.currency_id, quantity=linea.quantity, product=linea.product_id, partner=factura.partner_id)
-
+            if len(linea.tax_ids) > 0:
                 for i in impuestos['taxes']:
                     impuesto = self.env['account.tax'].browse(i['id'])
-                    if impuesto.tipo_impuesto_fel and not factura.currency_id.is_zero(i['amount']):
-                        if impuesto.tipo_impuesto_fel not in total_impuestos_extras:
-                            total_impuestos_extras[impuesto.tipo_impuesto_fel] = {
-                                'tipo': impuesto.tipo_impuesto_fel,
-                                'codigo': impuesto.codigo_unidad_gravable_fel,
-                                'total': i['amount'],
-                                'base': i['base'],
-                            }
+                    if not factura.currency_id.is_zero(i['amount']):
+                        if impuesto.tipo_impuesto_fel and impuesto.tipo_impuesto_fel != 'IVA':
+                            if impuesto.tipo_impuesto_fel not in total_impuestos_extras:
+                                total_impuestos_extras[impuesto.tipo_impuesto_fel] = {
+                                    'tipo': impuesto.tipo_impuesto_fel,
+                                    'codigo': impuesto.codigo_unidad_gravable_fel,
+                                    'total': i['amount'],
+                                    'base': i['base'],
+                                }
 
-                        if impuesto.tipo_impuesto_fel not in gran_total_impuestos_extras:
-                            gran_total_impuestos_extras[impuesto.tipo_impuesto_fel] = { 'tipo': impuesto.tipo_impuesto_fel, 'total': 0 }
-                        gran_total_impuestos_extras[impuesto.tipo_impuesto_fel]['total'] += i['amount']
+                            if impuesto.tipo_impuesto_fel not in gran_total_impuestos_extras:
+                                gran_total_impuestos_extras[impuesto.tipo_impuesto_fel] = { 'tipo': impuesto.tipo_impuesto_fel, 'total': 0 }
+                            gran_total_impuestos_extras[impuesto.tipo_impuesto_fel]['total'] += i['amount']
+                        
+                        # Si es IVA
+                        elif i['amount'] > 0:
+                            total_impuestos += i['amount']
 
-                        if not impuesto.price_include:
-                            total_linea += i['amount']
-                        else:
-                            total_impuestos -= i['amount']
+                        # Las retenciones se deben sumar al total de la linea
+                        elif i['amount'] < 0:
+                            total_linea += abs(i['amount'])
                 
             if factura.currency_id.is_zero(total_impuestos) and total_linea != 0:
                 gran_num_lineas_sin_impuestos += 1
@@ -580,7 +584,7 @@ class AccountJournal(models.Model):
 
     generar_fel = fields.Boolean('Generar FEL')
     tipo_documento_fel = fields.Selection([('FACT', 'FACT'), ('FCAM', 'FCAM'), ('FPEQ', 'FPEQ'), ('FCAP', 'FCAP'), ('FESP', 'FESP'), ('NABN', 'NABN'), ('RDON', 'RDON'), ('RECI', 'RECI'), ('NDEB', 'NDEB'), ('NCRE', 'NCRE')], 'Tipo de Documento FEL', copy=False)
-    error_en_historial_fel = fields.Boolean('Error FEL en historial', help='Los errores no se muestran en pantalla, solo se registran en el historial')
+    error_en_historial_fel = fields.Boolean('Registrar error FEL en historial', help='Los errores no se muestran en pantalla, solo se registran en el historial', default=True)
     contingencia_fel = fields.Boolean('Habilitar contingencia FEL')
     invoice_reference_type = fields.Selection(selection_add=[('fel', 'FEL')])
     no_usar_descuento_fel = fields.Boolean('No usar descuento cuando hay lineas negativas en FEL')
