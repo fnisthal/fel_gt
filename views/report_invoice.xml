@@ -1,9 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
-    <data>
-        <template id="report_invoice_document" inherit_id="account.report_invoice_document">
-            <div id="payment_term" position="before">
-                <div t-if="o.journal_id.generar_fel">
+    <template id="report_invoice_document" inherit_id="account.report_invoice_document">
+        <div id="payment_term" position="before">
+            <div t-if="o.journal_id.generar_fel">
                                         
                     <div class="row">
                         <div class="col">
@@ -98,8 +97,7 @@
                         <div>Grupo CDS, S.A.</div>
                         <div>NIT: 107902281</div>
                     </t>
-                </div>
             </div>
-        </template>
-    </data>
+        </div>
+    </template>
 </odoo>
