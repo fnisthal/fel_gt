@@ -43,6 +43,7 @@ class AccountMove(models.Model):
     resultado_xml_fel_name = fields.Char('Nombre resultado XML FEL', default='resultado_xml_fel.xml', size=32)
     certificador_fel = fields.Char('Certificador FEL', copy=False)
     uuid_pos_fel = fields.Char('UUID FEL', copy=False)
+    fel_reversal_move_id = fields.Many2one('account.move', string='Asiento de anulación FEL', copy=False, readonly=True)
     
     def _get_invoice_reference_odoo_fel(self):
         """ Usa el numero FEL
@@ -77,6 +78,162 @@ class AccountMove(models.Model):
             return True
 
         return False
+
+    def action_open_anular_factura_wizard(self):
+        self.ensure_one()
+        if self.state != 'posted':
+            raise UserError(_('Solo se pueden anular facturas publicadas.'))
+        if not self.is_sale_document(include_receipts=True):
+            raise UserError(_('Solo se pueden anular facturas de cliente.'))
+        if self.fel_reversal_move_id:
+            raise UserError(_('Esta factura ya tiene un asiento de anulación FEL.'))
+
+        return {
+            'type': 'ir.actions.act_window',
+            'name': _('Anular factura'),
+            'res_model': 'account.move.anular.wizard',
+            'view_mode': 'form',
+            'target': 'new',
+            'context': {
+                'default_move_id': self.id,
+                'default_motivo_fel': self.motivo_fel,
+            },
+        }
+
+    def button_cancel(self):
+        if self.filtered(lambda move: move.state == 'posted' and move.is_sale_document(include_receipts=True)):
+            raise UserError(_('Use el botón Anular para anular facturas publicadas sin romper la secuencia.'))
+        return super().button_cancel()
+
+    def action_anular_factura(self):
+        for factura in self:
+            factura._validar_anulacion_factura()
+
+            fel_vals = {}
+            if factura.requiere_certificacion():
+                fel_vals = factura._anular_fel_certificador()
+                factura._archivar_documentos_fel_actuales()
+                if fel_vals:
+                    factura.with_context(skip_invoice_sync=True).write(fel_vals)
+
+            factura._desconciliar_pagos_anulacion()
+            reversal_move = factura._crear_asiento_reverso_anulacion()
+            factura._conciliar_factura_con_reverso(reversal_move)
+            factura.fel_reversal_move_id = reversal_move
+            factura.message_post(body=_(
+                'Factura anulada. Se creó el asiento de reverso contable %s.',
+                reversal_move._get_html_link(),
+            ))
+
+        return True
+
+    def _validar_anulacion_factura(self):
+        self.ensure_one()
+        if self.state != 'posted':
+            raise UserError(_('Solo se pueden anular facturas publicadas.'))
+        if not self.is_sale_document(include_receipts=True):
+            raise UserError(_('Solo se pueden anular facturas de cliente.'))
+        if self.fel_reversal_move_id:
+            raise UserError(_('Esta factura ya tiene un asiento de anulación FEL.'))
+        if self.requiere_certificacion() and not self.firma_fel:
+            raise UserError(_('La factura requiere FEL y no tiene firma FEL.'))
+        if self.requiere_certificacion() and not self.motivo_fel:
+            raise UserError(_('Debe ingresar el motivo de anulación.'))
+
+    def _anular_fel_certificador(self):
+        self.ensure_one()
+        raise UserError(_('No hay un certificador FEL disponible para anular esta factura.'))
+
+    def _archivar_documentos_fel_actuales(self):
+        self.ensure_one()
+        attachments = []
+        fields_to_archive = [
+            ('documento_xml_fel', 'documento_xml_fel_name', 'documento_original_fel.xml'),
+            ('resultado_xml_fel', 'resultado_xml_fel_name', 'resultado_original_fel.xml'),
+        ]
+        if 'pdf_fel' in self._fields:
+            fields_to_archive.append(('pdf_fel', 'name_pdf_fel', 'pdf_original_fel'))
+
+        for field_name, filename_field, default_name in fields_to_archive:
+            value = self[field_name]
+            if not value:
+                continue
+
+            field = self._fields[field_name]
+            filename = self[filename_field] if filename_field in self._fields and self[filename_field] else default_name
+            datas = value if field.type == 'binary' else base64.b64encode(str(value).encode('utf-8'))
+            attachments.append({
+                'name': _('Original %s', filename),
+                'type': 'binary',
+                'datas': datas,
+                'res_model': self._name,
+                'res_id': self.id,
+            })
+
+        if attachments:
+            self.env['ir.attachment'].create(attachments)
+            self.message_post(body=_('Se archivaron los documentos FEL originales antes de registrar la anulación.'))
+
+    def _desconciliar_pagos_anulacion(self):
+        self.ensure_one()
+        receivable_payable_lines = self.line_ids.filtered(lambda line: line.account_type in ('asset_receivable', 'liability_payable'))
+        receivable_payable_lines.remove_move_reconcile()
+
+    def _crear_asiento_reverso_anulacion(self):
+        self.ensure_one()
+        line_commands = []
+        for line in self.line_ids.filtered(lambda l: l.display_type not in ('line_section', 'line_subsection', 'line_note')):
+            line_vals = {
+                'name': line.name or '/',
+                'account_id': line.account_id.id,
+                'partner_id': line.partner_id.id,
+                'currency_id': line.currency_id.id,
+                'amount_currency': -line.amount_currency,
+                'debit': line.credit,
+                'credit': line.debit,
+                'analytic_distribution': line.analytic_distribution,
+                'tax_tag_ids': [(6, 0, line.tax_tag_ids.ids)],
+            }
+            line_commands.append((0, 0, line_vals))
+
+        reversal_move = self.env['account.move'].with_context(
+            check_move_validity=False,
+            skip_fel_certification=True,
+            skip_invoice_sync=True,
+        ).create({
+            'move_type': 'entry',
+            'journal_id': self.journal_id.id,
+            'date': fields.Date.context_today(self),
+            'ref': _('Anulación de %s: %s', self.name, self.motivo_fel or ''),
+            'line_ids': line_commands,
+        })
+        reversal_move.with_context(skip_fel_certification=True)._post(soft=False)
+        return reversal_move
+
+    def _conciliar_factura_con_reverso(self, reversal_move):
+        self.ensure_one()
+        for account, lines in (self.line_ids + reversal_move.line_ids).filtered(
+            lambda line: line.account_type in ('asset_receivable', 'liability_payable') and not line.reconciled
+        ).grouped('account_id').items():
+            if account.reconcile:
+                lines.reconcile()
+
+    def action_reparar_anulaciones_fel_canceladas(self):
+        invoices = self.filtered(lambda move: move.state == 'cancel' and move.firma_fel and move.is_sale_document(include_receipts=True))
+        for factura in invoices:
+            if factura.fel_reversal_move_id:
+                continue
+            factura.button_draft()
+            factura.with_context(skip_fel_certification=True).action_post()
+            factura._desconciliar_pagos_anulacion()
+            reversal_move = factura._crear_asiento_reverso_anulacion()
+            factura._conciliar_factura_con_reverso(reversal_move)
+            factura.fel_reversal_move_id = reversal_move
+            factura.message_post(body=_(
+                'Factura FEL previamente cancelada restaurada a publicada. Se creó el asiento de reverso contable %s.',
+                reversal_move._get_html_link(),
+            ))
+        return True
 
     def descuento_lineas(self):
         self.ensure_one()
