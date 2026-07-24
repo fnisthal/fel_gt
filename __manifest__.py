@@ -9,6 +9,7 @@
     'website': 'http://aquih.com/',
     'depends': ['l10n_gt_extra'],
     'data': [
+        'data/account_move_server_actions.xml',
         'wizard/account_move_anular_wizard_views.xml',
         'views/account_views.xml',
         'views/res_company_views.xml',
