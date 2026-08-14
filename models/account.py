@@ -44,7 +44,11 @@ class AccountMove(models.Model):
     certificador_fel = fields.Char('Certificador FEL', copy=False)
     uuid_pos_fel = fields.Char('UUID FEL', copy=False)
     fel_reversal_move_id = fields.Many2one('account.move', string='Asiento de anulación FEL', copy=False, readonly=True)
-    
+    estado_anulacion_fel = fields.Selection([
+        ('suspenso', 'Suspenso (pendiente autorización SAT)'),
+        ('anulada', 'Anulada'),
+    ], string='Estado de anulación FEL', copy=False, tracking=True)
+
     def _get_invoice_reference_odoo_fel(self):
         """ Usa el numero FEL
         """
@@ -120,6 +124,7 @@ class AccountMove(models.Model):
             reversal_move = factura._crear_asiento_reverso_anulacion()
             factura._conciliar_factura_con_reverso(reversal_move)
             factura.fel_reversal_move_id = reversal_move
+            factura.estado_anulacion_fel = 'anulada'
             factura.message_post(body=_(
                 'Factura anulada. Se creó el asiento de reverso contable %s.',
                 reversal_move._get_html_link(),
@@ -139,6 +144,9 @@ class AccountMove(models.Model):
             raise UserError(_('La factura requiere FEL y no tiene firma FEL.'))
         if self.requiere_certificacion() and not self.motivo_fel:
             raise UserError(_('Debe ingresar el motivo de anulación.'))
+        # Una factura con notas de crédito/débito ya aplicadas sigue vigente ante SAT; no debe anularse por completo.
+        if self.env['account.move'].search_count([('factura_original_id', '=', self.id), ('state', '=', 'posted')]):
+            raise UserError(_('Esta factura ya tiene una Nota de Crédito o Débito aplicada; no debe anularse, ya que la factura sigue vigente.'))
 
     def _anular_fel_certificador(self):
         self.ensure_one()
@@ -229,6 +237,7 @@ class AccountMove(models.Model):
             reversal_move = factura._crear_asiento_reverso_anulacion()
             factura._conciliar_factura_con_reverso(reversal_move)
             factura.fel_reversal_move_id = reversal_move
+            factura.estado_anulacion_fel = 'anulada'
             factura.message_post(body=_(
                 'Factura FEL previamente cancelada restaurada a publicada. Se creó el asiento de reverso contable %s.',
                 reversal_move._get_html_link(),
