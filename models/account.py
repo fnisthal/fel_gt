@@ -430,16 +430,14 @@ class AccountMove(models.Model):
         gran_num_lineas_sin_impuestos = 0
         self.descuento_lineas()
         
-        for linea in factura.invoice_line_ids.sorted(key=lambda r: r.sequence):
+        for linea in factura.invoice_line_ids.filtered(lambda l: l.display_type == 'product').sorted(key=lambda r: r.sequence):
 
             if factura.currency_id.is_zero(linea.price_total) and not factura.journal_id.enviar_lineas_en_cero_fel:
                 continue
 
             linea_num += 1
 
-            tipo_producto = "B"
-            if linea.product_id.type == 'service':
-                tipo_producto = "S"
+            tipo_producto = "S" if linea.tipo_producto_sat == 'servicio' else "B"
             
             precio_unitario = linea.price_unit * (100-linea.discount) / 100
             precio_sin_descuento = linea.price_unit
@@ -539,10 +537,19 @@ class AccountMove(models.Model):
         GranTotal = etree.SubElement(Totales, DTE_NS+"GranTotal")
         GranTotal.text = '{:.6f}'.format(gran_total)
 
-        # Si no hay frase de exenta de iva configurada en la compañia, poner el escenario ingresado en frase_exento_fel
+        frase_exento = Frases.find('.//*[@TipoFrase="4"]')
+        if tipo_documento_fel in ['NCRE', 'NDEB'] and frase_exento is not None:
+            frase_exento.attrib['CodigoEscenario'] = "22"
+
+        # Si no hay frase de exenta de iva configurada en la compañía, poner el escenario ingresado en frase_exento_fel
         if Frases.find('.//*[@TipoFrase="4"]') is None:
             if tipo_documento_fel not in ['NABN', 'FESP'] and (factura.company_id.afiliacion_iva_fel or 'GEN') != 'PEQ' and gran_num_lineas_sin_impuestos > 0:
-                Frase = etree.SubElement(Frases, DTE_NS+"Frase", CodigoEscenario=str(factura.frase_exento_fel) if factura.frase_exento_fel else "1", TipoFrase="4")
+                codigo_escenario_exento = (
+                    "22"
+                    if tipo_documento_fel in ['NCRE', 'NDEB']
+                    else str(factura.frase_exento_fel) if factura.frase_exento_fel else "1"
+                )
+                etree.SubElement(Frases, DTE_NS+"Frase", CodigoEscenario=codigo_escenario_exento, TipoFrase="4")
 
         if factura.company_id.adenda_fel:
             Adenda = etree.SubElement(SAT, DTE_NS+"Adenda")
@@ -583,7 +590,7 @@ class AccountMove(models.Model):
                 PaisConsignatario.text = factura.consignatario_fel.country_id.name or "-" if factura.consignatario_fel else "-"
                 OtraReferencia = etree.SubElement(Exportacion, CEX_NS+"OtraReferencia")
                 OtraReferencia.text = factura.otra_referencia_fel or "-"
-                if len(factura.invoice_line_ids.filtered(lambda l: l.product_id.type != 'service')) > 0:
+                if len(factura.invoice_line_ids.filtered(lambda l: l.display_type == 'product').filtered(lambda l: l.tipo_producto_sat != 'servicio')) > 0:
                     INCOTERM = etree.SubElement(Exportacion, CEX_NS+"INCOTERM")
                     INCOTERM.text = factura.incoterm_fel or "-"
                 NombreExportador = etree.SubElement(Exportacion, CEX_NS+"NombreExportador")
