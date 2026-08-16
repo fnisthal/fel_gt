@@ -48,6 +48,22 @@ class AccountMove(models.Model):
         ('suspenso', 'Suspenso (pendiente autorización SAT)'),
         ('anulada', 'Anulada'),
     ], string='Estado de anulación FEL', copy=False, tracking=True)
+    estado_lista_fel = fields.Selection([
+        ('draft', 'Borrador'),
+        ('posted', 'Publicado'),
+        ('sent', 'Enviado'),
+        ('partial', 'Parcial'),
+        ('in_payment', 'En proceso de pago'),
+        ('paid', 'Pagado'),
+        ('reversed', 'Revertido'),
+        ('cancel', 'Cancelado'),
+        ('anulada', 'Anulada'),
+    ], string='Estado', compute='_compute_estado_lista_fel')
+
+    @api.depends('estado_anulacion_fel', 'status_in_payment')
+    def _compute_estado_lista_fel(self):
+        for move in self:
+            move.estado_lista_fel = move.estado_anulacion_fel or move.status_in_payment
 
     def _get_invoice_reference_odoo_fel(self):
         """ Usa el numero FEL

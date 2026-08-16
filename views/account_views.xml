@@ -51,10 +51,14 @@
         <field name="model">account.move</field>
         <field name="inherit_id" ref="account.view_invoice_tree"/>
         <field name="arch" type="xml">
-            <field name="status_in_payment" position="after">
-                <field name="estado_anulacion_fel" string="Anulación" widget="badge"
-                       decoration-danger="estado_anulacion_fel"
-                       invisible="not estado_anulacion_fel" optional="show"/>
+            <field name="status_in_payment" position="replace">
+                <field name="estado_lista_fel" string="Estado" widget="badge"
+                       decoration-info="estado_lista_fel == 'draft'"
+                       decoration-danger="estado_lista_fel in ('cancel', 'anulada')"
+                       decoration-muted="estado_lista_fel in ('posted', 'sent', 'partial')"
+                       decoration-success="estado_lista_fel in ('in_payment', 'paid', 'reversed')"
+                       invisible="payment_state == 'invoicing_legacy' or move_type == 'entry'"
+                       optional="show"/>
             </field>
         </field>
     </record>
