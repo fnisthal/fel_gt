@@ -187,7 +187,21 @@ class AccountMove(models.Model):
         receivable_payable_lines = self.line_ids.filtered(lambda line: line.account_type in ('asset_receivable', 'liability_payable'))
         receivable_payable_lines.remove_move_reconcile()
 
-    def _crear_asiento_reverso_anulacion(self):
+    def _obtener_fecha_anulacion_historica(self):
+        self.ensure_one()
+        mensajes = self.env['mail.message'].sudo().search([
+            ('model', '=', self._name),
+            ('res_id', '=', self.id),
+        ], order='date desc, id desc')
+        for mensaje in mensajes:
+            for seguimiento in mensaje.tracking_value_ids:
+                if seguimiento.field_id.name != 'state':
+                    continue
+                if (seguimiento.new_value_char or '').lower() in ('cancelled', 'cancelado', 'cancelada'):
+                    return fields.Date.to_date(fields.Datetime.context_timestamp(self, mensaje.date))
+        return False
+
+    def _crear_asiento_reverso_anulacion(self, fecha_anulacion=None):
         self.ensure_one()
         line_commands = []
         for line in self.line_ids.filtered(lambda l: l.display_type not in ('line_section', 'line_subsection', 'line_note')):
@@ -211,7 +225,7 @@ class AccountMove(models.Model):
         ).create({
             'move_type': 'entry',
             'journal_id': self.journal_id.id,
-            'date': fields.Date.context_today(self),
+            'date': fecha_anulacion or fields.Date.context_today(self),
             'ref': _('Anulación de %s: %s', self.name, self.motivo_fel or ''),
             'line_ids': line_commands,
         })
@@ -231,10 +245,11 @@ class AccountMove(models.Model):
         for factura in invoices:
             if factura.fel_reversal_move_id:
                 continue
+            fecha_anulacion = factura._obtener_fecha_anulacion_historica()
             factura.button_draft()
             factura.with_context(skip_fel_certification=True).action_post()
             factura._desconciliar_pagos_anulacion()
-            reversal_move = factura._crear_asiento_reverso_anulacion()
+            reversal_move = factura._crear_asiento_reverso_anulacion(fecha_anulacion)
             factura._conciliar_factura_con_reverso(reversal_move)
             factura.fel_reversal_move_id = reversal_move
             factura.estado_anulacion_fel = 'anulada'
