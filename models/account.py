@@ -1,6 +1,6 @@
 # -*- encoding: utf-8 -*-
 
-from odoo import models, fields, api, tools, _
+from odoo import Command, models, fields, api, tools, _
 from odoo.exceptions import UserError, ValidationError
 
 from lxml import etree, html
@@ -141,6 +141,7 @@ class AccountMove(models.Model):
             factura._conciliar_factura_con_reverso(reversal_move)
             factura.fel_reversal_move_id = reversal_move
             factura.estado_anulacion_fel = 'anulada'
+            factura._desligar_lineas_venta_anulacion()
             factura.message_post(body=_(
                 'Factura anulada. Se creó el asiento de reverso contable %s.',
                 reversal_move._get_html_link(),
@@ -202,6 +203,24 @@ class AccountMove(models.Model):
         self.ensure_one()
         receivable_payable_lines = self.line_ids.filtered(lambda line: line.account_type in ('asset_receivable', 'liability_payable'))
         receivable_payable_lines.remove_move_reconcile()
+
+    def _desligar_lineas_venta_anulacion(self):
+        """Detach sale order lines so an annulled invoice can be invoiced again."""
+        self.ensure_one()
+        if 'sale_line_ids' not in self.env['account.move.line']._fields:
+            return
+
+        invoice_lines = self.invoice_line_ids.filtered('sale_line_ids')
+        if not invoice_lines:
+            return
+
+        sale_orders = invoice_lines.mapped('sale_line_ids.order_id')
+        invoice_lines.write({'sale_line_ids': [Command.clear()]})
+        self.message_post(body=_(
+            'Se desligaron las líneas de venta de la factura anulada de las órdenes: %s.',
+            ', '.join(sale_orders.mapped('name')),
+        ))
+        return sale_orders
 
     def _obtener_fecha_anulacion_historica(self):
         self.ensure_one()
@@ -269,10 +288,22 @@ class AccountMove(models.Model):
             factura._conciliar_factura_con_reverso(reversal_move)
             factura.fel_reversal_move_id = reversal_move
             factura.estado_anulacion_fel = 'anulada'
+            factura._desligar_lineas_venta_anulacion()
             factura.message_post(body=_(
                 'Factura FEL previamente cancelada restaurada a publicada. Se creó el asiento de reverso contable %s.',
                 reversal_move._get_html_link(),
             ))
+        return True
+
+    def action_desligar_lineas_venta_anuladas(self):
+        """Repair sale links on posted invoices already marked as annulled."""
+        invoices = self.filtered(lambda move: (
+            move.state == 'posted'
+            and move.estado_anulacion_fel == 'anulada'
+            and move.is_sale_document(include_receipts=True)
+        ))
+        for factura in invoices:
+            factura._desligar_lineas_venta_anulacion()
         return True
 
     def descuento_lineas(self):
