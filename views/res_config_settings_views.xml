@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <record id="res_config_settings_view_form_fel_gt" model="ir.ui.view">
+        <field name="name">res.config.settings.view.form.fel.gt</field>
+        <field name="model">res.config.settings</field>
+        <field name="inherit_id" ref="account.res_config_settings_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//app[@name='account']" position="inside">
+                <block title="FEL Guatemala" name="fel_gt_settings_block">
+                    <setting id="fel_annulment_journal_setting"
+                             string="Diario de anulaciones contables"
+                             company_dependent="1"
+                             help="Diario misceláneo usado para registrar los asientos de reverso de facturas anuladas.">
+                        <field name="fel_annulment_journal_id"
+                               domain="[('company_id', '=', company_id), ('type', '=', 'general')]"/>
+                    </setting>
+                </block>
+            </xpath>
+        </field>
+    </record>
+</odoo>

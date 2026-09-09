@@ -157,6 +157,7 @@ class AccountMove(models.Model):
             raise UserError(_('Solo se pueden anular facturas de cliente.'))
         if self.fel_reversal_move_id:
             raise UserError(_('Esta factura ya tiene un asiento de anulación FEL.'))
+        self._get_fel_annulment_journal()
         if self.requiere_certificacion() and not self.firma_fel:
             raise UserError(_('La factura requiere FEL y no tiene firma FEL.'))
         if self.requiere_certificacion() and not self.motivo_fel:
@@ -236,8 +237,20 @@ class AccountMove(models.Model):
                     return fields.Date.to_date(fields.Datetime.context_timestamp(self, mensaje.date))
         return False
 
+    def _get_fel_annulment_journal(self):
+        self.ensure_one()
+        journal = self.company_id.fel_annulment_journal_id
+        if not journal:
+            raise UserError(_(
+                'Configure el diario de anulaciones contables en los ajustes de Contabilidad, sección FEL Guatemala.'
+            ))
+        if journal.type != 'general':
+            raise UserError(_('El diario de anulaciones contables debe ser de tipo Misceláneo.'))
+        return journal
+
     def _crear_asiento_reverso_anulacion(self, fecha_anulacion=None):
         self.ensure_one()
+        journal = self._get_fel_annulment_journal()
         line_commands = []
         for line in self.line_ids.filtered(lambda l: l.display_type not in ('line_section', 'line_subsection', 'line_note')):
             line_vals = {
@@ -259,7 +272,7 @@ class AccountMove(models.Model):
             skip_invoice_sync=True,
         ).create({
             'move_type': 'entry',
-            'journal_id': self.journal_id.id,
+            'journal_id': journal.id,
             'date': fecha_anulacion or fields.Date.context_today(self),
             'ref': _('Anulación de %s: %s', self.name, self.motivo_fel or ''),
             'line_ids': line_commands,

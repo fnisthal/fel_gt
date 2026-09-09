@@ -12,6 +12,13 @@ class ResCompany(models.Model):
     tipo_personeria_fel = fields.Char('Tipo Personeria FEL')
     frases_fel = fields.Text('Frases FEL', help="Puede usar la función frase(tipo=1, escenario=1) para agregar frases a la compañía.")
     adenda_fel = fields.Text('Adenda FEL')
+    fel_annulment_journal_id = fields.Many2one(
+        'account.journal',
+        string='Diario de anulaciones contables',
+        domain="[('company_id', '=', id), ('type', '=', 'general')]",
+        check_company=True,
+        help='Diario misceláneo usado para registrar los asientos de reverso de facturas anuladas.',
+    )
 
     # Restricción para validar que el nombre comercial esté definido
     @api.constrains('nombre_comercial', 'certificador_fel')
